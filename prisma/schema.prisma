@@ -13,36 +13,39 @@ datasource db {
 }
 
 model User {
-  id            String           @id @default(uuid())
-  phone         String?          @unique
-  email         String?          @unique
-  googleId      String?          @unique
-  name          String?
-  avatar        String?
-  status        UserStatus       @default(OFFLINE)
-  lastSeen      DateTime?
-  bio           String?
-  statusMessage String?
-  authProvider  AuthProvider     @default(PHONE)
-  chats         Chat[]           @relation("ChatUsers")
-  messages      Message[]
-  receipts      MessageReceipt[]
-  reactions     Reaction[]
-  createdAt     DateTime         @default(now())
+  id                  String           @id @default(uuid())
+  phone               String?          @unique
+  email               String?          @unique
+  googleId            String?          @unique
+  name                String?
+  avatar              String?
+  status              UserStatus       @default(OFFLINE)
+  lastSeen            DateTime?
+  bio                 String?
+  statusMessage       String?
+  authProvider        AuthProvider     @default(PHONE)
+  chats               Chat[]           @relation("ChatUsers")
+  messages            Message[]
+  receipts            MessageReceipt[]
+  reactions           Reaction[]
+  sentInvitations     Invitation[]     @relation("Inviter")
+  receivedInvitations Invitation[]     @relation("InvitedUser")
+  createdAt           DateTime         @default(now())
 }
 
 
 model Chat {
-  id              String    @id @default(uuid())
+  id              String       @id @default(uuid())
   name            String?
   avatar          String?
-  isGroup         Boolean   @default(false)
+  isGroup         Boolean      @default(false)
   pinnedMessageId String?
   settings        Json?
-  users           User[]    @relation("ChatUsers")
+  users           User[]       @relation("ChatUsers")
   messages        Message[]
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now()) @updatedAt
+  invitations     Invitation[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @default(now()) @updatedAt
 }
 
 model Message {
@@ -106,4 +109,40 @@ model Reaction {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId, emoji])
+}
+
+enum InvitationType {
+  PERMANENT_MEMBER
+  TEMPORARY_CALL
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model Invitation {
+  id            String           @id @default(uuid())
+  token         String           @unique @default(uuid())
+  chatId        String
+  invitedEmail  String
+  invitedUserId String?
+  inviterId     String
+  type          InvitationType
+  status        InvitationStatus @default(PENDING)
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @default(now()) @updatedAt
+
+  chat        Chat  @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  invitedUser User? @relation("InvitedUser", fields: [invitedUserId], references: [id], onDelete: Cascade)
+  inviter     User  @relation("Inviter", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([chatId, status])
+  @@index([invitedEmail, status])
 }

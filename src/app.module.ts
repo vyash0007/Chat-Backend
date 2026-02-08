@@ -10,6 +10,8 @@ import { ChatModule } from './chat/chat.module';
 import { CallModule } from './call/call.module';
 import { UsersModule } from './users/users.module';
 import { UploadController } from './chat/upload.controller';
+import { EmailModule } from './email/email.module';
+import { InvitationModule } from './invitation/invitation.module';
 
 
 @Module({
@@ -21,6 +23,8 @@ import { UploadController } from './chat/upload.controller';
     ChatModule,
     CallModule,
     UsersModule,
+    EmailModule,
+    InvitationModule,
   ],
   controllers: [AppController, TestController, UploadController],
   providers: [AppService],

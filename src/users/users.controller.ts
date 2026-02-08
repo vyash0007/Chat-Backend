@@ -25,4 +25,12 @@ export class UsersController {
     }
     return this.usersService.searchUsersByPhone(phone);
   }
+
+  @Get('search-by-email')
+  async searchUsersByEmail(@Query('email') email: string) {
+    if (!email) {
+      return [];
+    }
+    return this.usersService.searchUsersByEmail(email);
+  }
 }
