@@ -2,14 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { JwtService } from '@nestjs/jwt';
-import * as twilio from 'twilio';
 import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 
 
 @Injectable()
 export class AuthService {
-    private twilioClient: twilio.Twilio;
-    private twilioPhoneNumber: string;
+    private msg91AuthKey: string;
+    private msg91SenderId: string;
 
     constructor(
         private prisma: PrismaService,
@@ -17,11 +17,8 @@ export class AuthService {
         private jwtService: JwtService,
         private configService: ConfigService,
     ) {
-        const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID') || '';
-        const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN') || '';
-        this.twilioPhoneNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER') || '';
-
-        this.twilioClient = twilio.default(accountSid, authToken);
+        this.msg91AuthKey = this.configService.get<string>('MSG91_AUTH_KEY') || '';
+        this.msg91SenderId = this.configService.get<string>('MSG91_SENDER_ID') || 'MSGIND';
     }
 
 
@@ -33,19 +30,38 @@ export class AuthService {
         const redis = this.redisService.getClient();
         await redis.set(`otp:${phone}`, otp, 'EX', 300);
 
-        // 3️⃣ Send OTP via Twilio SMS
-        try {
-            await this.twilioClient.messages.create({
-                body: `Your OTP is: ${otp}. It will expire in 5 minutes.`,
-                from: this.twilioPhoneNumber,
-                to: phone,
-            });
+        // 🔥 ALWAYS log OTP to console for development
+        console.log(`\n🔐 OTP for ${phone}: ${otp}\n`);
 
-            console.log(`OTP sent to ${phone}: ${otp}`);
+        // 3️⃣ Send OTP via MSG91 SMS
+        try {
+            // Remove '+' and spaces from phone number for MSG91
+            const cleanPhone = phone.replace(/[\s+]/g, '');
+
+            const response = await axios.post(
+                'https://control.msg91.com/api/v5/flow/',
+                {
+                    template_id: '6988bcb9ef44340aef5c2fbc', // MSG91 OTP template ID
+                    short_url: '0',
+                    recipients: [
+                        {
+                            mobiles: cleanPhone,
+                            VAR1: otp, // OTP variable in template
+                        },
+                    ],
+                },
+                {
+                    headers: {
+                        'authkey': this.msg91AuthKey,
+                        'content-type': 'application/json',
+                    },
+                }
+            );
+
+            console.log(`✅ SMS sent successfully via MSG91`);
+            console.log(`MSG91 Response:`, response.data);
         } catch (error) {
-            console.error('Failed to send OTP via Twilio:', error);
-            // Log OTP to console as fallback for development
-            console.log(`[FALLBACK] OTP for ${phone}:`, otp);
+            console.error('⚠️ SMS failed (DLT not configured) - Use console OTP above');
         }
 
         return { message: 'OTP sent successfully' };
@@ -75,22 +91,90 @@ export class AuthService {
 
         if (!user) {
             user = await this.prisma.user.create({
-                data: { phone },
+                data: {
+                    phone,
+                    authProvider: 'PHONE',
+                },
             });
         }
 
-        // 🔐 Create JWT token
+        // Use shared method to generate response
+        return this.generateAuthResponse(user);
+    }
+
+    /**
+     * Handle Google OAuth login with account linking
+     */
+    async googleLogin(googleProfile: {
+        googleId: string;
+        email: string;
+        name: string;
+        avatar?: string;
+    }) {
+        // 1. Check if user exists with this googleId
+        let user = await this.prisma.user.findUnique({
+            where: { googleId: googleProfile.googleId },
+        });
+
+        if (user) {
+            // User found by googleId - regular OAuth login
+            return this.generateAuthResponse(user);
+        }
+
+        // 2. Check if user exists with this email (account linking scenario)
+        if (googleProfile.email) {
+            user = await this.prisma.user.findUnique({
+                where: { email: googleProfile.email },
+            });
+
+            if (user) {
+                // Email exists - link accounts
+                user = await this.prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        googleId: googleProfile.googleId,
+                        authProvider: 'BOTH', // Now has both phone and Google
+                        // Update name and avatar only if they're empty
+                        name: user.name || googleProfile.name,
+                        avatar: user.avatar || googleProfile.avatar,
+                        email: user.email || googleProfile.email,
+                    },
+                });
+
+                return this.generateAuthResponse(user);
+            }
+        }
+
+        // 3. New user - create with Google OAuth
+        user = await this.prisma.user.create({
+            data: {
+                googleId: googleProfile.googleId,
+                email: googleProfile.email,
+                name: googleProfile.name,
+                avatar: googleProfile.avatar,
+                authProvider: 'GOOGLE',
+            },
+        });
+
+        return this.generateAuthResponse(user);
+    }
+
+    /**
+     * Generate JWT token and auth response
+     * Works with both phone and Google auth
+     */
+    private generateAuthResponse(user: any) {
         const accessToken = this.jwtService.sign({
             sub: user.id,
             phone: user.phone,
+            email: user.email,
+            authProvider: user.authProvider,
         });
 
-        // ✅ Return user + token
         return {
             user,
             accessToken,
         };
-
     }
 
 

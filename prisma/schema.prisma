@@ -16,12 +16,14 @@ model User {
   id            String           @id @default(uuid())
   phone         String?          @unique
   email         String?          @unique
+  googleId      String?          @unique
   name          String?
   avatar        String?
   status        UserStatus       @default(OFFLINE)
   lastSeen      DateTime?
   bio           String?
   statusMessage String?
+  authProvider  AuthProvider     @default(PHONE)
   chats         Chat[]           @relation("ChatUsers")
   messages      Message[]
   receipts      MessageReceipt[]
@@ -73,6 +75,12 @@ enum UserStatus {
   AWAY
   DO_NOT_DISTURB
   OFFLINE
+}
+
+enum AuthProvider {
+  PHONE
+  GOOGLE
+  BOTH
 }
 
 model MessageReceipt {
