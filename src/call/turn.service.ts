@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import * as Twilio from 'twilio';
+import Twilio from 'twilio';
 
 @Injectable()
 export class TurnService {

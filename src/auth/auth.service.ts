@@ -2,15 +2,27 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { JwtService } from '@nestjs/jwt';
+import * as twilio from 'twilio';
+import { ConfigService } from '@nestjs/config';
 
 
 @Injectable()
 export class AuthService {
+    private twilioClient: twilio.Twilio;
+    private twilioPhoneNumber: string;
+
     constructor(
         private prisma: PrismaService,
         private redisService: RedisService,
         private jwtService: JwtService,
-    ) { }
+        private configService: ConfigService,
+    ) {
+        const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID');
+        const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
+        this.twilioPhoneNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER');
+
+        this.twilioClient = twilio.default(accountSid, authToken);
+    }
 
 
     async sendOtp(phone: string) {
@@ -21,8 +33,20 @@ export class AuthService {
         const redis = this.redisService.getClient();
         await redis.set(`otp:${phone}`, otp, 'EX', 300);
 
-        // 3️⃣ Log OTP (DEV ONLY)
-        console.log(`OTP for ${phone}:`, otp);
+        // 3️⃣ Send OTP via Twilio SMS
+        try {
+            await this.twilioClient.messages.create({
+                body: `Your OTP is: ${otp}. It will expire in 5 minutes.`,
+                from: this.twilioPhoneNumber,
+                to: phone,
+            });
+
+            console.log(`OTP sent to ${phone}: ${otp}`);
+        } catch (error) {
+            console.error('Failed to send OTP via Twilio:', error);
+            // Log OTP to console as fallback for development
+            console.log(`[FALLBACK] OTP for ${phone}:`, otp);
+        }
 
         return { message: 'OTP sent successfully' };
     }
