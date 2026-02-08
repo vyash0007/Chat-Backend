@@ -6,6 +6,42 @@ export class ChatService {
     constructor(private prisma: PrismaService) { }
 
     async createChat(userId: string, otherUserId: string) {
+        // Check if a chat already exists between these two users
+        const existingChat = await this.prisma.chat.findFirst({
+            where: {
+                AND: [
+                    { isGroup: false },
+                    {
+                        users: {
+                            some: { id: userId },
+                        },
+                    },
+                    {
+                        users: {
+                            some: { id: otherUserId },
+                        },
+                    },
+                ],
+            },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        status: true,
+                        lastSeen: true,
+                    },
+                },
+            },
+        });
+
+        // If chat exists, return it instead of creating a new one
+        if (existingChat) {
+            return existingChat;
+        }
+
+        // Create new chat if none exists
         return this.prisma.chat.create({
             data: {
                 users: {
