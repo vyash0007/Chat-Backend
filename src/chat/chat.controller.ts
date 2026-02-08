@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, BadRequestException, Delete } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Get, Param } from '@nestjs/common';
@@ -7,6 +7,12 @@ import { Get, Param } from '@nestjs/common';
 @Controller('chats')
 export class ChatController {
     constructor(private chatService: ChatService) { }
+
+    // Get all chats for the authenticated user
+    @Get()
+    getUserChats(@Req() req) {
+        return this.chatService.getUserChats(req.user.userId);
+    }
 
     @Post()
     createChat(
@@ -17,6 +23,16 @@ export class ChatController {
             throw new BadRequestException('otherUserId is required');
         }
         return this.chatService.createChat(req.user.userId, otherUserId);
+    }
+
+    @Post('group')
+    createGroup(@Body() body: { userIds: string[]; name: string }) {
+        return this.chatService.createGroupChat(body.userIds, body.name);
+    }
+
+    @Get(':chatId/messages')
+    getMessages(@Param('chatId') chatId: string) {
+        return this.chatService.getMessages(chatId);
     }
 
     @Post(':chatId/messages')
@@ -34,13 +50,26 @@ export class ChatController {
         );
     }
 
-    @Get(':chatId/messages')
-    getMessages(@Param('chatId') chatId: string) {
-        return this.chatService.getMessages(chatId);
+    // ========== NEW ENDPOINTS ==========
+
+    @Post('messages/:messageId/reactions')
+    addReaction(
+        @Req() req,
+        @Param('messageId') messageId: string,
+        @Body('emoji') emoji: string,
+    ) {
+        if (!emoji) {
+            throw new BadRequestException('emoji is required');
+        }
+        return this.chatService.addReaction(messageId, req.user.userId, emoji);
     }
 
-    @Post('group')
-    createGroup(@Body() body: { userIds: string[]; name: string }) {
-        return this.chatService.createGroupChat(body.userIds, body.name);
+    @Delete('messages/:messageId/reactions/:emoji')
+    removeReaction(
+        @Req() req,
+        @Param('messageId') messageId: string,
+        @Param('emoji') emoji: string,
+    ) {
+        return this.chatService.removeReaction(messageId, req.user.userId, emoji);
     }
 }

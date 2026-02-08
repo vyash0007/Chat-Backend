@@ -68,4 +68,116 @@ export class ChatService {
         });
     }
 
+    // ========== NEW METHODS ==========
+
+    async updateUserStatus(
+        userId: string,
+        status: 'ONLINE' | 'AWAY' | 'DO_NOT_DISTURB' | 'OFFLINE',
+    ) {
+        return this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                status,
+                lastSeen: status === 'OFFLINE' ? new Date() : null,
+            },
+        });
+    }
+
+    async markMessageAsRead(messageId: string, userId: string) {
+        // Check if receipt already exists
+        const existingReceipt = await this.prisma.messageReceipt.findUnique({
+            where: {
+                messageId_userId: {
+                    messageId,
+                    userId,
+                },
+            },
+        });
+
+        if (existingReceipt) {
+            return existingReceipt;
+        }
+
+        // Create new receipt
+        return this.prisma.messageReceipt.create({
+            data: {
+                messageId,
+                userId,
+            },
+        });
+    }
+
+    async addReaction(messageId: string, userId: string, emoji: string) {
+        // Check if reaction already exists
+        const existingReaction = await this.prisma.reaction.findUnique({
+            where: {
+                messageId_userId_emoji: {
+                    messageId,
+                    userId,
+                    emoji,
+                },
+            },
+        });
+
+        if (existingReaction) {
+            return existingReaction;
+        }
+
+        return this.prisma.reaction.create({
+            data: {
+                messageId,
+                userId,
+                emoji,
+            },
+        });
+    }
+
+    async removeReaction(messageId: string, userId: string, emoji: string) {
+        return this.prisma.reaction.deleteMany({
+            where: {
+                messageId,
+                userId,
+                emoji,
+            },
+        });
+    }
+
+    async getUserChats(userId: string) {
+        return this.prisma.chat.findMany({
+            where: {
+                users: {
+                    some: {
+                        id: userId,
+                    },
+                },
+            },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        status: true,
+                        lastSeen: true,
+                    },
+                },
+                messages: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                    include: {
+                        sender: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: {
+                updatedAt: 'desc',
+            },
+        });
+    }
+
 }

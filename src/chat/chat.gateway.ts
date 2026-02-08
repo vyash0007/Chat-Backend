@@ -5,6 +5,7 @@ import {
   MessageBody,
   ConnectedSocket,
   OnGatewayConnection,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
@@ -17,7 +18,9 @@ console.log('🔥 ChatGateway file loaded');
     origin: '*',
   },
 })
-export class ChatGateway implements OnGatewayConnection {
+export class ChatGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -26,7 +29,7 @@ export class ChatGateway implements OnGatewayConnection {
     private jwtService: JwtService,
   ) {}
 
-  handleConnection(socket: Socket) {
+  async handleConnection(socket: Socket) {
     try {
       const token = socket.handshake.auth.token;
 
@@ -43,10 +46,35 @@ export class ChatGateway implements OnGatewayConnection {
         phone: payload.phone,
       };
 
+      // Update user status to ONLINE
+      await this.chatService.updateUserStatus(payload.sub, 'ONLINE');
+
+      // Broadcast user online status
+      this.server.emit('userStatusChange', {
+        userId: payload.sub,
+        status: 'ONLINE',
+      });
+
       console.log('🔐 Socket authenticated:', payload.sub);
     } catch (err) {
       console.log('❌ Socket auth failed:', err.message);
       socket.disconnect();
+    }
+  }
+
+  async handleDisconnect(socket: Socket) {
+    const userId = socket.data.user?.userId;
+    if (userId) {
+      // Update user status to OFFLINE
+      await this.chatService.updateUserStatus(userId, 'OFFLINE');
+
+      // Broadcast user offline status
+      this.server.emit('userStatusChange', {
+        userId,
+        status: 'OFFLINE',
+      });
+
+      console.log('🔌 User disconnected:', userId);
     }
   }
 
@@ -200,5 +228,86 @@ export class ChatGateway implements OnGatewayConnection {
     socket.leave(`call:${data.chatId}`);
     // Notify remaining participants
     this.server.to(`call:${data.chatId}`).emit('userLeftCall', userId);
+  }
+
+  // ========== NEW EVENT HANDLERS ==========
+
+  @SubscribeMessage('typing')
+  handleTyping(
+    @MessageBody() data: { chatId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    console.log('⌨️ User typing:', user.userId, 'in chat:', data.chatId);
+
+    // Broadcast to everyone in chat except sender
+    socket.to(data.chatId).emit('userTyping', {
+      chatId: data.chatId,
+      userId: user.userId,
+      userName: user.name || 'User',
+    });
+  }
+
+  @SubscribeMessage('stopTyping')
+  handleStopTyping(
+    @MessageBody() data: { chatId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    console.log('🛑 User stopped typing:', user.userId, 'in chat:', data.chatId);
+
+    // Broadcast to everyone in chat except sender
+    socket.to(data.chatId).emit('userStoppedTyping', {
+      chatId: data.chatId,
+      userId: user.userId,
+    });
+  }
+
+  @SubscribeMessage('updateStatus')
+  async handleUpdateStatus(
+    @MessageBody() data: { status: 'ONLINE' | 'AWAY' | 'DO_NOT_DISTURB' | 'OFFLINE' },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    console.log('🟢 User status change:', user.userId, 'to', data.status);
+
+    // Update in database
+    await this.chatService.updateUserStatus(user.userId, data.status);
+
+    // Broadcast status change
+    this.server.emit('userStatusChange', {
+      userId: user.userId,
+      status: data.status,
+    });
+  }
+
+  @SubscribeMessage('markAsRead')
+  async handleMarkAsRead(
+    @MessageBody() data: { chatId: string; messageId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    console.log('👁 Mark as read:', data.messageId, 'by', user.userId);
+
+    // Create read receipt
+    const receipt = await this.chatService.markMessageAsRead(
+      data.messageId,
+      user.userId,
+    );
+
+    // Notify the sender
+    this.server.to(data.chatId).emit('messageRead', {
+      messageId: data.messageId,
+      userId: user.userId,
+      readAt: receipt.readAt,
+    });
   }
 }
