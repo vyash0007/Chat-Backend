@@ -12,6 +12,17 @@ export class ChatService {
                     connect: [{ id: userId }, { id: otherUserId }],
                 },
             },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        status: true,
+                        lastSeen: true,
+                    },
+                },
+            },
         });
     }
 
@@ -63,6 +74,17 @@ export class ChatService {
                 isGroup: true,
                 users: {
                     connect: userIds.map((id) => ({ id })),
+                },
+            },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        status: true,
+                        lastSeen: true,
+                    },
                 },
             },
         });
