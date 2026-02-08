@@ -18,7 +18,6 @@ async function bootstrap() {
   // Enable CORS
   const allowedOrigins = [
     'http://localhost:3000',
-    'http://192.168.1.158:3000',
     process.env.FRONTEND_URL,
   ].filter(Boolean);
 
