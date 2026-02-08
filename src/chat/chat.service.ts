@@ -6,6 +6,11 @@ export class ChatService {
     constructor(private prisma: PrismaService) { }
 
     async createChat(userId: string, otherUserId: string) {
+        // Prevent chat with self
+        if (userId === otherUserId) {
+            throw new BadRequestException('Cannot create chat with yourself');
+        }
+
         // Check if a chat already exists between these two users
         const existingChat = await this.prisma.chat.findFirst({
             where: {

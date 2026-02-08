@@ -26,8 +26,10 @@ export class ChatController {
     }
 
     @Post('group')
-    createGroup(@Body() body: { userIds: string[]; name: string }) {
-        return this.chatService.createGroupChat(body.userIds, body.name);
+    createGroup(@Req() req, @Body() body: { userIds: string[]; name: string }) {
+        // Ensure the creator is included in the group
+        const allUserIds = [req.user.userId, ...body.userIds.filter(id => id !== req.user.userId)];
+        return this.chatService.createGroupChat(allUserIds, body.name);
     }
 
     @Get(':chatId/messages')
