@@ -63,4 +63,23 @@ export class UsersService {
 
     return user;
   }
+
+  async searchUsersByPhone(phone: string) {
+    return this.prisma.user.findMany({
+      where: {
+        phone: {
+          contains: phone,
+        },
+      },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        avatar: true,
+        status: true,
+        bio: true,
+      },
+      take: 10,
+    });
+  }
 }

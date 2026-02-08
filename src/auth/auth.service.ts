@@ -17,9 +17,9 @@ export class AuthService {
         private jwtService: JwtService,
         private configService: ConfigService,
     ) {
-        const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID');
-        const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN');
-        this.twilioPhoneNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER');
+        const accountSid = this.configService.get<string>('TWILIO_ACCOUNT_SID') || '';
+        const authToken = this.configService.get<string>('TWILIO_AUTH_TOKEN') || '';
+        this.twilioPhoneNumber = this.configService.get<string>('TWILIO_PHONE_NUMBER') || '';
 
         this.twilioClient = twilio.default(accountSid, authToken);
     }
