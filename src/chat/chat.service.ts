@@ -180,4 +180,19 @@ export class ChatService {
         });
     }
 
+    async getOnlineUsers() {
+        return this.prisma.user.findMany({
+            where: {
+                status: {
+                    in: ['ONLINE', 'AWAY', 'DO_NOT_DISTURB'],
+                },
+            },
+            select: {
+                id: true,
+                status: true,
+                lastSeen: true,
+            },
+        });
+    }
+
 }

@@ -3,7 +3,7 @@ import { AuthService } from './auth.service';
 import { SendOtpDto, VerifyOtpDto } from './dto';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
+import type { Response } from 'express';
 
 @Controller('auth')
 export class AuthController {

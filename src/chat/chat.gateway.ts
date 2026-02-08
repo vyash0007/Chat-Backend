@@ -49,7 +49,13 @@ export class ChatGateway
       // Update user status to ONLINE
       await this.chatService.updateUserStatus(payload.sub, 'ONLINE');
 
-      // Broadcast user online status
+      // Get all currently online users
+      const onlineUsers = await this.chatService.getOnlineUsers();
+
+      // Send initial online users list to the newly connected user
+      socket.emit('onlineUsers', onlineUsers);
+
+      // Broadcast user online status to all other users
       this.server.emit('userStatusChange', {
         userId: payload.sub,
         status: 'ONLINE',
