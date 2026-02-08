@@ -15,7 +15,11 @@ console.log('🔥 ChatGateway file loaded');
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: [
+      'http://localhost:3000',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean),
+    credentials: true,
   },
 })
 export class ChatGateway
