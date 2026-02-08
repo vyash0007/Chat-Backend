@@ -98,6 +98,15 @@ export class ChatService {
                 content,
                 type,
             },
+            include: {
+                sender: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                    },
+                },
+            },
         });
     }
 
@@ -105,6 +114,15 @@ export class ChatService {
         return this.prisma.message.findMany({
             where: { chatId },
             orderBy: { createdAt: 'asc' },
+            include: {
+                sender: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                    },
+                },
+            },
         });
     }
 
