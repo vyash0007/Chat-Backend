@@ -31,6 +31,9 @@ model User {
   sentInvitations     Invitation[]     @relation("Inviter")
   receivedInvitations Invitation[]     @relation("InvitedUser")
   createdAt           DateTime         @default(now())
+
+  callsAsCaller       CallRecord[]     @relation("Caller")
+  callsAsTarget       CallRecord[]     @relation("Target")
 }
 
 
@@ -44,6 +47,7 @@ model Chat {
   users           User[]       @relation("ChatUsers")
   messages        Message[]
   invitations     Invitation[]
+  callRecords     CallRecord[]
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @default(now()) @updatedAt
 }
@@ -145,4 +149,26 @@ model Invitation {
   @@index([token])
   @@index([chatId, status])
   @@index([invitedEmail, status])
+}
+
+model CallRecord {
+  id          String           @id @default(uuid())
+  chatId      String
+  callerId    String
+  targetId    String
+  isVideo     Boolean
+  status      CallRecordStatus @default(COMPLETED)
+  duration    Int              @default(0) // Duration in seconds
+  createdAt   DateTime         @default(now())
+
+  chat        Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  caller      User             @relation("Caller", fields: [callerId], references: [id], onDelete: Cascade)
+  target      User             @relation("Target", fields: [targetId], references: [id], onDelete: Cascade)
+}
+
+enum CallRecordStatus {
+  COMPLETED
+  MISSED
+  REJECTED
+  CANCELLED
 }

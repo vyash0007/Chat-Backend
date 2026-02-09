@@ -10,6 +10,8 @@ import {
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
 import { JwtService } from '@nestjs/jwt';
+import { CallService } from '../call/call.service';
+import { CallRecordStatus } from '@prisma/client';
 
 console.log('🔥 ChatGateway file loaded');
 
@@ -30,7 +32,10 @@ export class ChatGateway
   constructor(
     private chatService: ChatService,
     private jwtService: JwtService,
+    private callService: CallService,
   ) { }
+
+  private activeCalls = new Map<string, string>(); // chatId -> callRecordId
 
   async handleConnection(socket: Socket) {
     try {
@@ -359,6 +364,23 @@ export class ChatGateway
 
     // Broadcast incoming call to all sockets that have joined this chat
     // We need to find all sockets in the chat room except the caller
+    // Create a call record in the database
+    // We assume it's missed until accepted
+    // For 1-on-1, targetId is the other participant
+    const participants = await this.chatService.getChatParticipants(data.chatId);
+    const targetId = participants.find(id => id !== user.userId);
+
+    if (targetId) {
+      const record = await this.callService.createCallRecord({
+        chatId: data.chatId,
+        callerId: user.userId,
+        targetId: targetId,
+        isVideo: data.isVideoCall,
+        status: 'MISSED',
+      });
+      this.activeCalls.set(data.chatId, record.id);
+    }
+
     const room = this.server.sockets.adapter.rooms.get(data.chatId);
     if (room) {
       for (const sid of room) {
@@ -397,7 +419,7 @@ export class ChatGateway
   }
 
   @SubscribeMessage('acceptCall')
-  handleAcceptCall(
+  async handleAcceptCall(
     @MessageBody() data: { chatId: string; callerId: string },
     @ConnectedSocket() socket: Socket,
   ) {
@@ -405,6 +427,12 @@ export class ChatGateway
     if (!user) return;
 
     console.log('✅ Call accepted by:', user.userId, 'from:', data.callerId);
+
+    // Update call record status to COMPLETED
+    const callRecordId = this.activeCalls.get(data.chatId);
+    if (callRecordId) {
+      await this.callService.updateCallStatus(callRecordId, 'COMPLETED');
+    }
 
     // Find caller's socket and notify them
     for (const [, s] of this.server.sockets.sockets) {
@@ -418,7 +446,7 @@ export class ChatGateway
   }
 
   @SubscribeMessage('rejectCall')
-  handleRejectCall(
+  async handleRejectCall(
     @MessageBody() data: { chatId: string; callerId: string },
     @ConnectedSocket() socket: Socket,
   ) {
@@ -426,6 +454,13 @@ export class ChatGateway
     if (!user) return;
 
     console.log('❌ Call rejected by:', user.userId, 'from:', data.callerId);
+
+    // Update call record status to REJECTED
+    const callRecordId = this.activeCalls.get(data.chatId);
+    if (callRecordId) {
+      await this.callService.updateCallStatus(callRecordId, 'REJECTED');
+      this.activeCalls.delete(data.chatId);
+    }
 
     // Find caller's socket and notify them
     for (const [, s] of this.server.sockets.sockets) {
@@ -447,6 +482,13 @@ export class ChatGateway
     if (!user) return;
 
     console.log('🚫 Call cancelled by:', user.userId, 'in chat:', data.chatId);
+
+    // Update call record status to CANCELLED
+    const callRecordId = this.activeCalls.get(data.chatId);
+    if (callRecordId) {
+      await this.callService.updateCallStatus(callRecordId, 'CANCELLED');
+      this.activeCalls.delete(data.chatId);
+    }
 
     // Notify all participants that the call was cancelled
     const chatParticipants = await this.chatService.getChatParticipants(data.chatId);

@@ -4,9 +4,11 @@ import { ChatController } from './chat.controller';
 import { UploadController } from './upload.controller';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
+import { CallModule } from '../call/call.module';
 
 @Module({
   imports: [
+    CallModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '7d' },
@@ -15,4 +17,4 @@ import { ChatGateway } from './chat.gateway';
   controllers: [ChatController, UploadController],
   providers: [ChatService, ChatGateway],
 })
-export class ChatModule {}
+export class ChatModule { }
