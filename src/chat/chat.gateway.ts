@@ -239,6 +239,28 @@ export class ChatGateway
     this.server.to(`call:${data.chatId}`).emit('userLeftCall', userId);
   }
 
+  @SubscribeMessage('screenShareStarted')
+  handleScreenShareStarted(
+    @MessageBody() data: { chatId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const userId = socket.data.user?.userId;
+    if (!userId) return;
+    // Notify all other participants in the call
+    socket.to(`call:${data.chatId}`).emit('screenShareStarted', { userId });
+  }
+
+  @SubscribeMessage('screenShareStopped')
+  handleScreenShareStopped(
+    @MessageBody() data: { chatId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const userId = socket.data.user?.userId;
+    if (!userId) return;
+    // Notify all other participants in the call
+    socket.to(`call:${data.chatId}`).emit('screenShareStopped', { userId });
+  }
+
   // ========== NEW EVENT HANDLERS ==========
 
   @SubscribeMessage('typing')
