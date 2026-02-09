@@ -226,7 +226,6 @@ export class ChatService {
     async getUserChats(userId: string) {
         return this.prisma.chat.findMany({
             where: {
-                isArchived: false,
                 users: {
                     some: {
                         id: userId,
