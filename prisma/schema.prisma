@@ -48,8 +48,9 @@ model Chat {
   messages        Message[]
   invitations     Invitation[]
   callRecords     CallRecord[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @default(now()) @updatedAt
+  isArchived     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @default(now()) @updatedAt
 }
 
 model Message {

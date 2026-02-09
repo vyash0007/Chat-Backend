@@ -226,6 +226,7 @@ export class ChatService {
     async getUserChats(userId: string) {
         return this.prisma.chat.findMany({
             where: {
+                isArchived: false,
                 users: {
                     some: {
                         id: userId,
@@ -285,6 +286,62 @@ export class ChatService {
                 id: true,
                 name: true,
                 avatar: true,
+            },
+        });
+    }
+
+    async archiveChat(chatId: string) {
+        const chat = await this.prisma.chat.findUnique({
+            where: { id: chatId },
+        });
+
+        if (!chat) {
+            throw new NotFoundException(`Chat with id ${chatId} not found`);
+        }
+
+        return this.prisma.chat.update({
+            where: { id: chatId },
+            data: {
+                isArchived: !chat.isArchived,
+            },
+        });
+    }
+
+    async getArchivedChats(userId: string) {
+        return this.prisma.chat.findMany({
+            where: {
+                isArchived: true,
+                users: {
+                    some: {
+                        id: userId,
+                    },
+                },
+            },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        status: true,
+                        lastSeen: true,
+                    },
+                },
+                messages: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                    include: {
+                        sender: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: {
+                updatedAt: 'desc',
             },
         });
     }

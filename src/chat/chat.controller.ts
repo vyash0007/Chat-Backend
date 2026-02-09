@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req, UseGuards, BadRequestException, Delete } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, BadRequestException, Delete, Patch } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Get, Param } from '@nestjs/common';
@@ -73,5 +73,15 @@ export class ChatController {
         @Param('emoji') emoji: string,
     ) {
         return this.chatService.removeReaction(messageId, req.user.userId, emoji);
+    }
+
+    @Get('archive')
+    getArchivedChats(@Req() req) {
+        return this.chatService.getArchivedChats(req.user.userId);
+    }
+
+    @Patch(':chatId/archive')
+    archiveChat(@Param('chatId') chatId: string) {
+        return this.chatService.archiveChat(chatId);
     }
 }
