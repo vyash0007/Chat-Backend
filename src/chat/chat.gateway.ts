@@ -23,15 +23,14 @@ console.log('🔥 ChatGateway file loaded');
   },
 })
 export class ChatGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   constructor(
     private chatService: ChatService,
     private jwtService: JwtService,
-  ) {}
+  ) { }
 
   async handleConnection(socket: Socket) {
     try {
@@ -319,5 +318,127 @@ export class ChatGateway
       userId: user.userId,
       readAt: receipt.readAt,
     });
+  }
+
+  // ========== CALL INITIATION EVENTS ==========
+
+  @SubscribeMessage('initiateCall')
+  async handleInitiateCall(
+    @MessageBody() data: { chatId: string; isVideoCall: boolean },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    console.log('📞 Call initiated by:', user.userId, 'in chat:', data.chatId, 'video:', data.isVideoCall);
+
+    // Get caller info from database
+    const callerInfo = await this.chatService.getUserById(user.userId);
+
+    // Broadcast incoming call to all sockets that have joined this chat
+    // We need to find all sockets in the chat room except the caller
+    const room = this.server.sockets.adapter.rooms.get(data.chatId);
+    if (room) {
+      for (const sid of room) {
+        const s = this.server.sockets.sockets.get(sid);
+        if (s && s.data.user?.userId !== user.userId) {
+          s.emit('incomingCall', {
+            chatId: data.chatId,
+            callerId: user.userId,
+            callerName: callerInfo?.name || 'Unknown',
+            callerAvatar: callerInfo?.avatar || null,
+            isVideoCall: data.isVideoCall,
+          });
+        }
+      }
+    }
+
+    // Also emit to users who might not have joined the chat room yet
+    // by broadcasting to sockets that belong to chat participants
+    const chatParticipants = await this.chatService.getChatParticipants(data.chatId);
+    for (const participantId of chatParticipants) {
+      if (participantId !== user.userId) {
+        // Find socket by user ID
+        for (const [, s] of this.server.sockets.sockets) {
+          if (s.data.user?.userId === participantId) {
+            s.emit('incomingCall', {
+              chatId: data.chatId,
+              callerId: user.userId,
+              callerName: callerInfo?.name || 'Unknown',
+              callerAvatar: callerInfo?.avatar || null,
+              isVideoCall: data.isVideoCall,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  @SubscribeMessage('acceptCall')
+  handleAcceptCall(
+    @MessageBody() data: { chatId: string; callerId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    console.log('✅ Call accepted by:', user.userId, 'from:', data.callerId);
+
+    // Find caller's socket and notify them
+    for (const [, s] of this.server.sockets.sockets) {
+      if (s.data.user?.userId === data.callerId) {
+        s.emit('callAccepted', {
+          chatId: data.chatId,
+          acceptedBy: user.userId,
+        });
+      }
+    }
+  }
+
+  @SubscribeMessage('rejectCall')
+  handleRejectCall(
+    @MessageBody() data: { chatId: string; callerId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    console.log('❌ Call rejected by:', user.userId, 'from:', data.callerId);
+
+    // Find caller's socket and notify them
+    for (const [, s] of this.server.sockets.sockets) {
+      if (s.data.user?.userId === data.callerId) {
+        s.emit('callRejected', {
+          chatId: data.chatId,
+          rejectedBy: user.userId,
+        });
+      }
+    }
+  }
+
+  @SubscribeMessage('cancelCall')
+  async handleCancelCall(
+    @MessageBody() data: { chatId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    console.log('🚫 Call cancelled by:', user.userId, 'in chat:', data.chatId);
+
+    // Notify all participants that the call was cancelled
+    const chatParticipants = await this.chatService.getChatParticipants(data.chatId);
+    for (const participantId of chatParticipants) {
+      if (participantId !== user.userId) {
+        for (const [, s] of this.server.sockets.sockets) {
+          if (s.data.user?.userId === participantId) {
+            s.emit('callCancelled', {
+              chatId: data.chatId,
+              cancelledBy: user.userId,
+            });
+          }
+        }
+      }
+    }
   }
 }

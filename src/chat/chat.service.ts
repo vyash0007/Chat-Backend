@@ -276,4 +276,31 @@ export class ChatService {
         });
     }
 
+    // ========== CALL HELPER METHODS ==========
+
+    async getUserById(userId: string) {
+        return this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                name: true,
+                avatar: true,
+            },
+        });
+    }
+
+    async getChatParticipants(chatId: string): Promise<string[]> {
+        const chat = await this.prisma.chat.findUnique({
+            where: { id: chatId },
+            include: {
+                users: {
+                    select: { id: true },
+                },
+            },
+        });
+
+        if (!chat) return [];
+        return chat.users.map(user => user.id);
+    }
+
 }
