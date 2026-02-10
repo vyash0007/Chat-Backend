@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Req, UseGuards, BadRequestException, Delete, Patch } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Get, Param } from '@nestjs/common';
+import { Get, Param, Query } from '@nestjs/common';
 
 @UseGuards(JwtAuthGuard)
 @Controller('chats')
@@ -33,8 +33,16 @@ export class ChatController {
     }
 
     @Get(':chatId/messages')
-    getMessages(@Param('chatId') chatId: string) {
-        return this.chatService.getMessages(chatId);
+    getMessages(
+        @Param('chatId') chatId: string,
+        @Query('limit') limit?: string,
+        @Query('cursor') cursor?: string,
+    ) {
+        return this.chatService.getMessages(
+            chatId,
+            limit ? parseInt(limit) : 50,
+            cursor,
+        );
     }
 
     @Post(':chatId/messages')
@@ -83,5 +91,24 @@ export class ChatController {
     @Patch(':chatId/archive')
     archiveChat(@Param('chatId') chatId: string) {
         return this.chatService.archiveChat(chatId);
+    }
+
+    @Post(':chatId/members')
+    addMembers(
+        @Param('chatId') chatId: string,
+        @Body('userIds') userIds: string[],
+    ) {
+        if (!userIds || userIds.length === 0) {
+            throw new BadRequestException('userIds are required');
+        }
+        return this.chatService.addMembersToChat(chatId, userIds);
+    }
+
+    @Delete(':chatId/members/:userId')
+    removeMember(
+        @Param('chatId') chatId: string,
+        @Param('userId') userId: string,
+    ) {
+        return this.chatService.removeMemberFromChat(chatId, userId);
     }
 }

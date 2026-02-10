@@ -110,10 +110,15 @@ export class ChatService {
         });
     }
 
-    async getMessages(chatId: string) {
+    async getMessages(chatId: string, limit: number = 50, cursor?: string) {
         return this.prisma.message.findMany({
             where: { chatId },
-            orderBy: { createdAt: 'asc' },
+            take: limit,
+            ...(cursor && {
+                skip: 1,
+                cursor: { id: cursor },
+            }),
+            orderBy: { createdAt: 'desc' },
             include: {
                 sender: {
                     select: {
@@ -368,6 +373,69 @@ export class ChatService {
                         id: true,
                         name: true,
                         avatar: true,
+                        status: true,
+                        lastSeen: true,
+                    },
+                },
+            },
+        });
+    }
+
+    async addMembersToChat(chatId: string, userIds: string[]) {
+        const chat = await this.prisma.chat.findUnique({
+            where: { id: chatId },
+            select: { isGroup: true },
+        });
+
+        if (!chat) throw new NotFoundException('Chat not found');
+        if (!chat.isGroup) throw new BadRequestException('Cannot add members to a private chat');
+
+        return this.prisma.chat.update({
+            where: { id: chatId },
+            data: {
+                users: {
+                    connect: userIds.map(id => ({ id })),
+                },
+            },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        status: true,
+                        lastSeen: true,
+                    },
+                },
+            },
+        });
+    }
+
+    async removeMemberFromChat(chatId: string, userId: string) {
+        const chat = await this.prisma.chat.findUnique({
+            where: { id: chatId },
+            include: { users: true },
+        });
+
+        if (!chat) throw new NotFoundException('Chat not found');
+        if (!chat.isGroup) throw new BadRequestException('Cannot remove members from a private chat');
+        if (chat.users.length <= 1) throw new BadRequestException('Cannot remove the last member of a group');
+
+        return this.prisma.chat.update({
+            where: { id: chatId },
+            data: {
+                users: {
+                    disconnect: { id: userId },
+                },
+            },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        status: true,
+                        lastSeen: true,
                     },
                 },
             },

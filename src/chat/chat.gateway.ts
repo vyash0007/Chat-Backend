@@ -116,6 +116,7 @@ export class ChatGateway
       chatId: string;
       content: string;
       type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'LOCATION';
+      tempId?: string;
     },
     @ConnectedSocket() socket: Socket,
   ) {
@@ -136,11 +137,34 @@ export class ChatGateway
       data.type,
     );
 
-    console.log('📤 Emitting newMessage:', message);
+    // Correlate with optimistic update if tempId exists
+    const messageResponse = {
+      ...message,
+      tempId: data.tempId,
+    };
 
-    this.server.to(data.chatId).emit('newMessage', message);
+    console.log('📤 Emitting newMessage:', messageResponse);
 
-    return message;
+    this.server.to(data.chatId).emit('newMessage', messageResponse);
+
+    return messageResponse;
+  }
+
+  @SubscribeMessage('markRead')
+  async handleMarkRead(
+    @MessageBody() data: { chatId: string; messageId: string },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const user = socket.data.user;
+    if (!user) return;
+
+    await this.chatService.markMessageAsRead(data.messageId, user.userId);
+
+    // Notify others that the message has been read
+    socket.to(data.chatId).emit('messageRead', {
+      messageId: data.messageId,
+      userId: user.userId,
+    });
   }
 
   @SubscribeMessage('joinCall')
