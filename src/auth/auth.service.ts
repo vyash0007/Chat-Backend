@@ -26,9 +26,8 @@ export class AuthService {
         // 1️⃣ Generate 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // 2️⃣ Store OTP in Redis for 5 minutes
-        const redis = this.redisService.getClient();
-        await redis.set(`otp:${phone}`, otp, 'EX', 300);
+        // 2️⃣ Store OTP for 5 minutes
+        await this.redisService.set(`otp:${phone}`, otp, 300);
 
         // 🔥 ALWAYS log OTP to console for development
         console.log(`\n🔐 OTP for ${phone}: ${otp}\n`);
@@ -68,10 +67,8 @@ export class AuthService {
     }
 
     async verifyOtp(phone: string, otp: string) {
-        const redis = this.redisService.getClient();
-
-        // 1️⃣ Get OTP from Redis
-        const storedOtp = await redis.get(`otp:${phone}`);
+        // 1️⃣ Get stored OTP
+        const storedOtp = await this.redisService.get(`otp:${phone}`);
 
         if (!storedOtp) {
             throw new Error('OTP expired');
@@ -82,7 +79,7 @@ export class AuthService {
         }
 
         // 2️⃣ Remove OTP after success
-        await redis.del(`otp:${phone}`);
+        await this.redisService.del(`otp:${phone}`);
 
         // 3️⃣ Find or create user
         let user = await this.prisma.user.findUnique({

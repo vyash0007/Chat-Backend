@@ -362,30 +362,40 @@ export class ChatGateway
     // Get caller info from database
     const callerInfo = await this.chatService.getUserById(user.userId);
 
-    // Broadcast incoming call to all sockets that have joined this chat
-    // We need to find all sockets in the chat room except the caller
-    // Create a call record in the database
-    // We assume it's missed until accepted
-    // For 1-on-1, targetId is the other participant
-    const chat = await this.chatService.getChatById(data.chatId);
+    // Create a call record in the database (wrapped in try-catch so
+    // a DB failure doesn't prevent notifications from being sent)
+    try {
+      const chat = await this.chatService.getChatById(data.chatId);
 
-    if (chat) {
-      const targetId = chat.isGroup ? undefined : chat.users.find(u => u.id !== user.userId)?.id;
-      const record = await this.callService.createCallRecord({
-        chatId: data.chatId,
-        callerId: user.userId,
-        targetId: targetId,
-        isVideo: data.isVideoCall,
-        status: 'MISSED',
-      });
-      this.activeCalls.set(data.chatId, record.id);
+      if (chat) {
+        const targetId = chat.isGroup ? undefined : chat.users.find(u => u.id !== user.userId)?.id;
+        const record = await this.callService.createCallRecord({
+          chatId: data.chatId,
+          callerId: user.userId,
+          targetId: targetId,
+          isVideo: data.isVideoCall,
+          status: 'MISSED',
+        });
+        this.activeCalls.set(data.chatId, record.id);
+      }
+    } catch (err) {
+      console.error('⚠️ Failed to create call record:', err);
     }
 
-    const room = this.server.sockets.adapter.rooms.get(data.chatId);
-    if (room) {
-      for (const sid of room) {
-        const s = this.server.sockets.sockets.get(sid);
-        if (s && s.data.user?.userId !== user.userId) {
+    // Notify all chat participants (single deduplicated loop)
+    const notifiedUserIds = new Set<string>();
+    const chatParticipants = await this.chatService.getChatParticipants(data.chatId);
+
+    console.log('📋 Chat participants to notify:', chatParticipants.filter(id => id !== user.userId));
+
+    for (const participantId of chatParticipants) {
+      if (participantId === user.userId || notifiedUserIds.has(participantId)) continue;
+      notifiedUserIds.add(participantId);
+
+      // Find all connected sockets for this participant
+      for (const [, s] of this.server.sockets.sockets) {
+        if (s.data.user?.userId === participantId) {
+          console.log('📨 Emitting incomingCall to:', participantId, 'socket:', s.id);
           s.emit('incomingCall', {
             chatId: data.chatId,
             callerId: user.userId,
@@ -397,25 +407,7 @@ export class ChatGateway
       }
     }
 
-    // Also emit to users who might not have joined the chat room yet
-    // by broadcasting to sockets that belong to chat participants
-    const chatParticipants = await this.chatService.getChatParticipants(data.chatId);
-    for (const participantId of chatParticipants) {
-      if (participantId !== user.userId) {
-        // Find socket by user ID
-        for (const [, s] of this.server.sockets.sockets) {
-          if (s.data.user?.userId === participantId) {
-            s.emit('incomingCall', {
-              chatId: data.chatId,
-              callerId: user.userId,
-              callerName: callerInfo?.name || 'Unknown',
-              callerAvatar: callerInfo?.avatar || null,
-              isVideoCall: data.isVideoCall,
-            });
-          }
-        }
-      }
-    }
+    console.log('✅ Call notifications sent to', notifiedUserIds.size, 'participant(s)');
   }
 
   @SubscribeMessage('acceptCall')
