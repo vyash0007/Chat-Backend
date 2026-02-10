@@ -359,4 +359,19 @@ export class ChatService {
         return chat.users.map(user => user.id);
     }
 
+    async getChatById(chatId: string) {
+        return this.prisma.chat.findUnique({
+            where: { id: chatId },
+            include: {
+                users: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                    },
+                },
+            },
+        });
+    }
+
 }

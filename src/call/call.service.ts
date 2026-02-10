@@ -9,7 +9,7 @@ export class CallService {
     async createCallRecord(data: {
         chatId: string;
         callerId: string;
-        targetId: string;
+        targetId?: string;
         isVideo: boolean;
         status?: CallRecordStatus;
     }) {
@@ -27,7 +27,17 @@ export class CallService {
     async getCallHistory(userId: string) {
         return this.prisma.callRecord.findMany({
             where: {
-                OR: [{ callerId: userId }, { targetId: userId }],
+                OR: [
+                    { callerId: userId },
+                    { targetId: userId },
+                    {
+                        chat: {
+                            users: {
+                                some: { id: userId }
+                            }
+                        }
+                    }
+                ],
             },
             include: {
                 caller: {
@@ -44,6 +54,14 @@ export class CallService {
                         avatar: true,
                     },
                 },
+                chat: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        isGroup: true,
+                    }
+                }
             },
             orderBy: {
                 createdAt: 'desc',

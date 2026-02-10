@@ -367,10 +367,10 @@ export class ChatGateway
     // Create a call record in the database
     // We assume it's missed until accepted
     // For 1-on-1, targetId is the other participant
-    const participants = await this.chatService.getChatParticipants(data.chatId);
-    const targetId = participants.find(id => id !== user.userId);
+    const chat = await this.chatService.getChatById(data.chatId);
 
-    if (targetId) {
+    if (chat) {
+      const targetId = chat.isGroup ? undefined : chat.users.find(u => u.id !== user.userId)?.id;
       const record = await this.callService.createCallRecord({
         chatId: data.chatId,
         callerId: user.userId,

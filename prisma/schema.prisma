@@ -156,7 +156,7 @@ model CallRecord {
   id          String           @id @default(uuid())
   chatId      String
   callerId    String
-  targetId    String
+  targetId    String?
   isVideo     Boolean
   status      CallRecordStatus @default(COMPLETED)
   duration    Int              @default(0) // Duration in seconds
@@ -164,7 +164,7 @@ model CallRecord {
 
   chat        Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
   caller      User             @relation("Caller", fields: [callerId], references: [id], onDelete: Cascade)
-  target      User             @relation("Target", fields: [targetId], references: [id], onDelete: Cascade)
+  target      User?            @relation("Target", fields: [targetId], references: [id], onDelete: Cascade)
 }
 
 enum CallRecordStatus {
